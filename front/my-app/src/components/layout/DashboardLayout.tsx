@@ -1,9 +1,13 @@
 "use client"
-import { main } from "framer-motion/client"
+
 import { Navbar } from "./Navbar"
 import { Sidebar } from "./Sidebar"
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+type DashboardLayoutProps = {
+    children: React.ReactNode
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return (
         <div className="flex h-screen">
             <Sidebar />
