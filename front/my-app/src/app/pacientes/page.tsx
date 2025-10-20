@@ -1,21 +1,29 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
+
 import DashboardLayout from "@/components/layout/DashboardLayout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import api from "@/lib/api"
 import { UserPlus, Users } from "lucide-react"
-import { useState, useEffect } from "react"
-import { toast } from "sonner"
-import axios from "axios"
 
 interface Paciente {
     id: number
     nome: string
-    cpf: string
-    telefone: string
-    email: string
+    cpf?: string
+    telefone?: string
+    email?: string
+}
+
+interface PacienteRequest {
+    nome: string
+    cpf?: string
+    telefone?: string
+    email?: string
 }
 
 export default function PacientesPage() {
@@ -24,51 +32,70 @@ export default function PacientesPage() {
     const [cpf, setCpf] = useState("")
     const [telefone, setTelefone] = useState("")
     const [email, setEmail] = useState("")
+    const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
 
     useEffect(() => {
         carregarPacientes()
     }, [])
 
+    const formularioValido = useMemo(() => nome.trim().length > 0, [nome])
+
     const carregarPacientes = async () => {
+        setLoading(true)
         try {
-            const res = await axios.get("http://localhost:8080/pacientes")
-            setPacientes(res.data)
-        } catch {
-            toast.error("Erro ao carregar pacientes.")
+            const { data } = await api.get<Paciente[]>("/pacientes")
+            setPacientes(data)
+        } catch (error) {
+            console.error(error)
+            toast.error("Não foi possível carregar os pacientes.")
+        } finally {
+            setLoading(false)
         }
     }
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-
-        if (!nome || !cpf || !telefone) {
-            toast.warning("Preencha os campos obrigatórios!")
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault()
+        if (!formularioValido) {
+            toast.warning("Informe ao menos o nome do paciente.")
             return
         }
 
-        const novoPaciente = { nome, cpf, telefone, email }
+        const payload: PacienteRequest = {
+            nome: nome.trim(),
+            cpf: cpf.trim() || undefined,
+            telefone: telefone.trim() || undefined,
+            email: email.trim() || undefined,
+        }
 
+        setSaving(true)
         try {
-            const res = await axios.post("http://localhost:8080/pacientes", novoPaciente)
-            setPacientes((prev) => [...prev, res.data])
+            const { data } = await api.post<Paciente>("/pacientes", payload)
+            setPacientes((prev) => [...prev, data])
             toast.success("Paciente cadastrado com sucesso!")
             setNome("")
             setCpf("")
             setTelefone("")
             setEmail("")
-        } catch {
+        } catch (error) {
+            console.error(error)
             toast.error("Erro ao cadastrar paciente.")
+        } finally {
+            setSaving(false)
         }
     }
 
     const excluirPaciente = async (id: number) => {
-        if (!confirm("Deseja realmente excluir este paciente?")) return
+        const confirmado = window.confirm("Deseja realmente excluir este paciente?")
+        if (!confirmado) return
+
         try {
-            await axios.delete(`http://localhost:8080/pacientes/${id}`)
-            setPacientes((prev) => prev.filter((p) => p.id !== id))
-            toast.success("Paciente removido.")
-        } catch {
-            toast.error("Erro ao excluir paciente.")
+            await api.delete(`/pacientes/${id}`)
+            setPacientes((prev) => prev.filter((paciente) => paciente.id !== id))
+            toast.success("Paciente removido com sucesso.")
+        } catch (error) {
+            console.error(error)
+            toast.error("Não foi possível excluir o paciente.")
         }
     }
 
@@ -81,7 +108,6 @@ export default function PacientesPage() {
                     </h1>
                 </header>
 
-                {/* Formulário de novo paciente */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-blue-600 flex items-center gap-2">
@@ -89,14 +115,17 @@ export default function PacientesPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <form
+                            onSubmit={handleSubmit}
+                            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                        >
                             <div>
-                                <Label htmlFor="nome">Nome</Label>
+                                <Label htmlFor="nome">Nome *</Label>
                                 <Input
                                     id="nome"
                                     placeholder="Nome completo"
                                     value={nome}
-                                    onChange={(e) => setNome(e.target.value)}
+                                    onChange={(event) => setNome(event.target.value)}
                                 />
                             </div>
 
@@ -106,7 +135,7 @@ export default function PacientesPage() {
                                     id="cpf"
                                     placeholder="000.000.000-00"
                                     value={cpf}
-                                    onChange={(e) => setCpf(e.target.value)}
+                                    onChange={(event) => setCpf(event.target.value)}
                                 />
                             </div>
 
@@ -116,7 +145,7 @@ export default function PacientesPage() {
                                     id="telefone"
                                     placeholder="(00) 00000-0000"
                                     value={telefone}
-                                    onChange={(e) => setTelefone(e.target.value)}
+                                    onChange={(event) => setTelefone(event.target.value)}
                                 />
                             </div>
 
@@ -126,60 +155,65 @@ export default function PacientesPage() {
                                     id="email"
                                     placeholder="email@exemplo.com"
                                     value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    onChange={(event) => setEmail(event.target.value)}
                                 />
                             </div>
 
                             <div className="md:col-span-2 flex justify-end">
-                                <Button type="submit" className="bg-primary hover:bg-blue-500">
-                                    Salvar
+                                <Button
+                                    type="submit"
+                                    className="bg-primary hover:bg-blue-500"
+                                    disabled={saving}
+                                >
+                                    {saving ? "Salvando..." : "Salvar"}
                                 </Button>
                             </div>
                         </form>
                     </CardContent>
                 </Card>
 
-                {/* Lista de pacientes */}
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-blue-600">Pacientes Cadastrados</CardTitle>
+                        <CardTitle className="text-blue-600">Pacientes cadastrados</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {pacientes.length === 0 ? (
+                        {loading ? (
+                            <p className="text-sm text-gray-500">Carregando pacientes...</p>
+                        ) : pacientes.length === 0 ? (
                             <p className="text-gray-500 text-sm">Nenhum paciente encontrado.</p>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left border-collapse">
                                     <thead className="bg-blue-100 dark:bg-zinc-800 text-blue-700 dark:text-blue-400">
-                                    <tr>
-                                        <th className="p-2 border-b">Nome</th>
-                                        <th className="p-2 border-b">CPF</th>
-                                        <th className="p-2 border-b">Telefone</th>
-                                        <th className="p-2 border-b">E-mail</th>
-                                        <th className="p-2 border-b text-right">Ações</th>
-                                    </tr>
+                                        <tr>
+                                            <th className="p-2 border-b">Nome</th>
+                                            <th className="p-2 border-b">CPF</th>
+                                            <th className="p-2 border-b">Telefone</th>
+                                            <th className="p-2 border-b">E-mail</th>
+                                            <th className="p-2 border-b text-right">Ações</th>
+                                        </tr>
                                     </thead>
                                     <tbody>
-                                    {pacientes.map((p) => (
-                                        <tr
-                                            key={p.id}
-                                            className="hover:bg-blue-50 dark:hover:bg-zinc-700 transition"
-                                        >
-                                            <td className="p-2 border-b">{p.nome}</td>
-                                            <td className="p-2 border-b">{p.cpf}</td>
-                                            <td className="p-2 border-b">{p.telefone}</td>
-                                            <td className="p-2 border-b">{p.email || "-"}</td>
-                                            <td className="p-2 border-b text-right">
-                                                <Button
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    onClick={() => excluirPaciente(p.id)}
-                                                >
-                                                    Excluir
-                                                </Button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                        {pacientes.map((paciente) => (
+                                            <tr
+                                                key={paciente.id}
+                                                className="hover:bg-blue-50 dark:hover:bg-zinc-700 transition"
+                                            >
+                                                <td className="p-2 border-b">{paciente.nome}</td>
+                                                <td className="p-2 border-b">{paciente.cpf || "-"}</td>
+                                                <td className="p-2 border-b">{paciente.telefone || "-"}</td>
+                                                <td className="p-2 border-b">{paciente.email || "-"}</td>
+                                                <td className="p-2 border-b text-right">
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => excluirPaciente(paciente.id)}
+                                                    >
+                                                        Excluir
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
